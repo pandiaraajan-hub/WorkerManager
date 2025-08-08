@@ -117,14 +117,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error creating worker:', error);
       
+      // Handle Zod validation errors
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      
       // Handle unique constraint violations
       if (error.code === '23505' && error.constraint === 'workers_workers_id_unique') {
-        return res.status(400).json({ 
+        return res.status(409).json({ 
           message: `Workers ID "${error.detail.match(/\(([^)]+)\)/)?.[1] || 'this value'}" already exists. Please use a different Workers ID.` 
         });
       }
       
-      res.status(400).json({ message: "Invalid worker data" });
+      res.status(500).json({ 
+        message: "Failed to create worker",
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   });
 
@@ -174,11 +185,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/courses", async (req, res) => {
     try {
+      console.log('Creating course with data:', req.body);
       const validatedData = insertCourseSchema.parse(req.body);
       const course = await storage.createCourse(validatedData);
+      console.log('Course created successfully:', course);
       res.status(201).json(course);
-    } catch (error) {
-      res.status(400).json({ message: "Invalid course data" });
+    } catch (error: any) {
+      console.error('Error creating course:', error);
+      
+      // Handle Zod validation errors
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      
+      // Handle database unique constraint violations
+      if (error.code === '23505') {
+        return res.status(409).json({ 
+          message: "Course with this name already exists" 
+        });
+      }
+      
+      res.status(500).json({ 
+        message: "Failed to create course",
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   });
 
